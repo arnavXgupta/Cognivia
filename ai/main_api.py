@@ -26,6 +26,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), ".", ".."))
 # Import your core AI logic
 from ai.core.chatbot import ContextualChatbot
 from ai.core.generation_task import ContentGenerator
+from ai.core.llm_connector import get_llm
+from ai.ingestion.common_utils import initialize_clients, get_embedding_model
 
 # Import your ingestion runners
 from ai.ingestion.yt_ingestion import run_youtube_ingestion
@@ -36,27 +38,51 @@ from ai.ingestion.pdf_ingestion import run_ingestion_from_uploads
 # ==============================================================================
 
 # This dictionary will hold our AI models, loaded on startup.
-# We use app.state, which is the recommended way to handle this.
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     print("AI API Startup: Loading core AI modules...")
+#     try:
+#         app.state.chatbot = ContextualChatbot()
+#         app.state.generator = ContentGenerator()
+#         print("AI core modules loaded successfully.")
+#     except Exception as e:
+#         print(f"FATAL: AI core modules failed to load: {e}")
+#         raise RuntimeError(f"Failed to initialize AI models: {e}")
+    
+#     yield
+#     print("AI API Shutdown.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manages the application's lifespan.
-    Loads AI models on startup and cleans up on shutdown.
-    """
     print("AI API Startup: Loading core AI modules...")
     try:
-        app.state.chatbot = ContextualChatbot()
-        app.state.generator = ContentGenerator()
-        print("AI core modules loaded successfully.")
+        # 1. Load models ONCE
+        llm_instance = get_llm()
+        if not llm_instance:
+            raise RuntimeError("Failed to get LLM instance. Is Ollama running?")
+
+        embedding_model_instance = get_embedding_model()
+        pinecone_client_instance = initialize_clients()
+
+        # 2. Pass them into the classes
+        app.state.chatbot = ContextualChatbot(
+            llm=llm_instance,
+            embedding_model=embedding_model_instance,
+            pinecone_client=pinecone_client_instance
+        )
+        app.state.generator = ContentGenerator(
+            llm=llm_instance,
+            embedding_model=embedding_model_instance,
+            pinecone_client=pinecone_client_instance
+        )
+        print("AI core modules loaded successfully (single instances).")
+
     except Exception as e:
         print(f"FATAL: AI core modules failed to load: {e}")
-        # In a production environment, you might want to retry or exit
-        # For now, we'll raise it to stop the server from starting in a broken state
         raise RuntimeError(f"Failed to initialize AI models: {e}")
-    
+
     yield
-    
-    # Clean up (if any) on shutdown
+
     print("AI API Shutdown.")
 
 # Initialize the FastAPI app with the lifespan manager
@@ -214,4 +240,4 @@ if __name__ == "__main__":
     
     print("Starting AI API server...")
     # Run the server with auto-reload for development
-    uvicorn.run("main_api:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main_api:app", host="0.0.0.0", port=8000, reload=False)

@@ -57,14 +57,17 @@ class ContextualChatbot:
     """
     A chatbot that uses a vector store to answer questions in a context-aware manner.
     """
-    def __init__(self):
+    def __init__(self, llm, embedding_model, pinecone_client):
         """
         Initializes all necessary components for the RAG pipeline upon creation.
         """
         print("Initializing Contextual Chatbot...")
         try:
-            self.pinecone_client, self.embedding_model = initialize_clients()
-            self.llm = get_llm()
+            # self.pinecone_client, self.embedding_model = initialize_clients()
+            # self.llm = get_llm()
+            self.llm = llm
+            self.embedding_model = embedding_model
+            self.pinecone_client = pinecone_client
             
             if not self.llm:
                 raise ConnectionError("Failed to initialize the LLM. Is the Ollama server running?")
@@ -160,42 +163,42 @@ class ContextualChatbot:
 # 3. EXAMPLE USAGE
 # ==============================================================================
 
-if __name__ == "__main__":
-    # This block allows you to test the chatbot directly from the command line.
+# if __name__ == "__main__":
+#     # This block allows you to test the chatbot directly from the command line.
     
-    # --- IMPORTANT ---
-    # Replace this with a URL or filename that you have ALREADY INGESTED.
-    # The namespace will be derived from this.
-    # TEST_SOURCE_ID = "https://www.youtube.com/watch?v=mBjPyte2pXo" 
-    TEST_SOURCE_ID = "OS.pdf"
-    # Or for a PDF: TEST_SOURCE_ID = "my_document.pdf"
+#     # --- IMPORTANT ---
+#     # Replace this with a URL or filename that you have ALREADY INGESTED.
+#     # The namespace will be derived from this.
+#     # TEST_SOURCE_ID = "https://www.youtube.com/watch?v=mBjPyte2pXo" 
+#     TEST_SOURCE_ID = "OS.pdf"
+#     # Or for a PDF: TEST_SOURCE_ID = "my_document.pdf"
     
-    try:
-        chatbot = ContextualChatbot()
+#     try:
+#         chatbot = ContextualChatbot()
 
-        # Start a simple interactive loop
-        print("\n--- Contextual Chatbot CLI ---")
-        print(f"Targeting knowledge from: {TEST_SOURCE_ID}")
-        print("Type 'exit' to quit.")
+#         # Start a simple interactive loop
+#         print("\n--- Contextual Chatbot CLI ---")
+#         print(f"Targeting knowledge from: {TEST_SOURCE_ID}")
+#         print("Type 'exit' to quit.")
         
-        while True:
-            user_query = input("\nYour Question: ")
-            if user_query.lower() == 'exit':
-                break
+#         while True:
+#             user_query = input("\nYour Question: ")
+#             if user_query.lower() == 'exit':
+#                 break
             
-            response = chatbot.ask(user_query, TEST_SOURCE_ID)
+#             response = chatbot.ask(user_query, TEST_SOURCE_ID)
 
-            print("\n--- AI Answer ---")
-            print(response["answer"])
-            print("\n--- Sources Used ---")
-            if response["sources"]:
-                for i, source in enumerate(response["sources"]):
-                    print(f"  Source {i+1}:")
-                    print(f"    - Content: '{source['content'][:100]}...'")
-                    print(f"    - Metadata: {source['metadata']}")
-            else:
-                print("  No sources were retrieved for this query.")
-            print("--------------------\n")
+#             print("\n--- AI Answer ---")
+#             print(response["answer"])
+#             print("\n--- Sources Used ---")
+#             if response["sources"]:
+#                 for i, source in enumerate(response["sources"]):
+#                     print(f"  Source {i+1}:")
+#                     print(f"    - Content: '{source['content'][:100]}...'")
+#                     print(f"    - Metadata: {source['metadata']}")
+#             else:
+#                 print("  No sources were retrieved for this query.")
+#             print("--------------------\n")
 
-    except Exception as e:
-        print(f"Failed to run chatbot CLI: {e}")
+#     except Exception as e:
+#         print(f"Failed to run chatbot CLI: {e}")

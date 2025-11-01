@@ -70,14 +70,15 @@ class ContentGenerator:
     """
     Handles synthesis and generation of content from a full set of documents.
     """
-    def __init__(self):
+    def __init__(self, llm, embedding_model, pinecone_client):
         """
         Initializes the necessary components for content generation.
         """
         print("Initializing Content Generator...")
         try:
-            self.pinecone_client, self.embedding_model = initialize_clients()
-            self.llm = get_llm()
+            self.llm = llm
+            self.embedding_model = embedding_model
+            self.pinecone_client = pinecone_client
 
             if not self.llm:
                 raise ConnectionError("Failed to initialize the LLM. Is the Ollama server running?")

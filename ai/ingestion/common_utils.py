@@ -34,26 +34,44 @@ EMBEDDING_BATCH_SIZE = 256
 # 1. CLIENT & MODEL INITIALIZATION
 # ==============================================================================
 
-def initialize_clients() -> Tuple[PineconeClient, Embeddings]:
-    """
-    Initializes and returns the Pinecone client and the embedding model.
-    This ensures that both are configured consistently across the application.
-    """
-    # Initialize Pinecone Client
-    if not PINECONE_API_KEY:
-        raise ValueError("PINECONE_API_KEY is not set in the environment variables.")
-    pinecone_client = PineconeClient(api_key=PINECONE_API_KEY)
+# def initialize_clients() -> Tuple[PineconeClient, Embeddings]:
+#     """
+#     Initializes and returns the Pinecone client and the embedding model.
+#     This ensures that both are configured consistently across the application.
+#     """
+#     from langchain_community.embeddings import HuggingFaceEmbeddings
+#     # Initialize Pinecone Client
+#     if not PINECONE_API_KEY:
+#         raise ValueError("PINECONE_API_KEY is not set in the environment variables.")
+#     pinecone_client = PineconeClient(api_key=PINECONE_API_KEY)
     
-    # Initialize Embedding Model (Lazy loading HuggingFaceEmbeddings to avoid circular import issues)
+#     # Initialize Embedding Model (Lazy loading HuggingFaceEmbeddings to avoid circular import issues)
+#     print("Initializing local embedding model 'intfloat/e5-small-v2'...")
+#     embedding_model = HuggingFaceEmbeddings(
+#         model_name="intfloat/e5-small-v2",
+#         model_kwargs={'device': 'cpu'}
+#     )
+#     print("Local embedding model initialized.")
+    
+#     return pinecone_client, embedding_model
+
+def get_embedding_model():
+    """Initializes and returns the embedding model."""
     from langchain_community.embeddings import HuggingFaceEmbeddings
     print("Initializing local embedding model 'intfloat/e5-small-v2'...")
-    embedding_model = HuggingFaceEmbeddings(
+    return HuggingFaceEmbeddings(
         model_name="intfloat/e5-small-v2",
-        model_kwargs={'device': 'cpu'}
+        model_kwargs={'device': 'cpu'} # or 'cuda' if you have VRAM to spare
     )
-    print("Local embedding model initialized.")
-    
-    return pinecone_client, embedding_model
+
+def initialize_clients():
+    # This function no longer loads the embedding model
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    if not pinecone_api_key:
+        raise ValueError("PINECONE_API_KEY is not set.")
+
+    pinecone_client = PineconeClient(api_key=pinecone_api_key)
+    return pinecone_client
 
 # ==============================================================================
 # 2. SHARED HELPER FUNCTIONS
