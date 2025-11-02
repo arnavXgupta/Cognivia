@@ -18,6 +18,7 @@ from typing import List, Dict, Any
 
 # FastAPI and Pydantic
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 
 import sys
@@ -91,6 +92,15 @@ app = FastAPI(
     description="API for managing data ingestion and AI-powered learning tasks.",
     version="1.0.0",
     lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://localhost:8008"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ==============================================================================

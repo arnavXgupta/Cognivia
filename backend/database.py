@@ -44,11 +44,16 @@ class Resource(SQLModel, table=True):
     
     # This will be the unique ID we use to talk to the AI API
     # e.g., "my_document.pdf" or "https://www.youtube.com/watch?v=..."
-    source_id: str = Field(unique=True) 
-
+    # Note: Not unique globally - same file/URL can be in different folders
+    # The AI service uses this to identify the namespace in Pinecone
+    source_id: str = Field(index=True) 
+    
     # Link back to the LearningFolder
-    folder_id: Optional[int] = Field(default=None, foreign_key="learningfolder.id")
+    folder_id: Optional[int] = Field(default=None, foreign_key="learningfolder.id", index=True)
     folder: Optional[LearningFolder] = Relationship(back_populates="resources")
+    
+    # Note: We handle uniqueness at the application level (checking for duplicates before insert)
+    # This avoids SQLModel/SQLAlchemy compatibility issues with composite unique constraints
 
 
 # --- Database Utility Functions ---
