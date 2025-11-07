@@ -14,10 +14,10 @@ This API provides endpoints for:
 import os
 import asyncio
 from contextlib import asynccontextmanager
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 # FastAPI and Pydantic
-from fastapi import FastAPI, HTTPException, UploadFile, File, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 
@@ -144,30 +144,51 @@ async def ingest_youtube(request: YouTubeIngestRequest, background_tasks: Backgr
     
     return {"message": f"Started ingestion for {len(urls_list)} YouTube videos."}
 
-@app.post("/ingest/pdf")
-async def ingest_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
-    """
-    Starts the ingestion process for a single uploaded PDF file in the background.
-    Responds immediately with the source_id (filename).
-    """
-    print(f"Received ingestion request for PDF: {file.filename}")
+# @app.post("/ingest/pdf")
+# async def ingest_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+#     """
+#     Starts the ingestion process for a single uploaded PDF file in the background.
+#     Responds immediately with the source_id (filename).
+#     """
+#     print(f"Received ingestion request for PDF: {file.filename}")
     
+#     try:
+#         # Read the file content as bytes
+#         file_content = await file.read()
+        
+#         # Prepare the file tuple that our script expects
+#         file_tuple = (file.filename, file_content)
+        
+#         # Run the ingestion in the background
+#         background_tasks.add_task(run_ingestion_from_uploads, [file_tuple])
+        
+#         return {
+#             "message": "Started ingestion for PDF.",
+#             "source_id": file.filename # Return the filename as the ID
+#         }
+#     except Exception as e:
+#         print(f"Error reading or processing PDF file: {e}")
+#         raise HTTPException(status_code=500, detail=f"Failed to process file: {e}")
+
+@app.post("/ingest/pdf")
+async def ingest_pdf(background_tasks: BackgroundTasks, file: UploadFile = File(...), callback_url: str = Form(None), source_id: str = Form(None)):
     try:
-        # Read the file content as bytes
-        file_content = await file.read()
-        
-        # Prepare the file tuple that our script expects
-        file_tuple = (file.filename, file_content)
-        
-        # Run the ingestion in the background
-        background_tasks.add_task(run_ingestion_from_uploads, [file_tuple])
-        
-        return {
-            "message": "Started ingestion for PDF.",
-            "source_id": file.filename # Return the filename as the ID
-        }
+        content = await file.read()
+        def run_task():
+            try:
+                run_ingestion_from_uploads([(file.filename, content)])
+                status_payload = {"source_id": source_id or file.filename, "status": "ready"}
+            except Exception as e:
+                status_payload = {"source_id": source_id or file.filename, "status": "failed", "error": str(e)}
+            if callback_url:
+                try:
+                    import requests
+                    requests.post(callback_url, json=status_payload, timeout=10)
+                except Exception as _:
+                    pass
+        background_tasks.add_task(run_task)
+        return {"message": "Ingestion started"}
     except Exception as e:
-        print(f"Error reading or processing PDF file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process file: {e}")
 
 # --- AI CORE ENDPOINTS (SYNCHRONOUS RESPONSE) ---

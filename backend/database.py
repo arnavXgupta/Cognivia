@@ -1,76 +1,126 @@
 # backend/database.py
 
 """
-This file defines the database models and connection logic for the backend.
-We use SQLModel, which combines SQLAlchemy (for the database) and Pydantic (for data validation).
+MongoDB database models and connection logic for the backend.
+We use Pydantic for validation and Motor for async MongoDB operations.
 """
 
+import os
 from typing import Optional, List
-from sqlmodel import Field, SQLModel, create_engine, Session, Relationship
+from pydantic import BaseModel, Field
+from motor.motor_asyncio import AsyncIOMotorClient
+from bson import ObjectId
+from dotenv import load_dotenv
 
-# --- Configuration ---
+load_dotenv()
 
-# We'll use SQLite, which stores the database in a single file named 'backend.db'
-# This is perfect for development.
-SQLITE_FILE_NAME = "backend.db"
-sqlite_url = f"sqlite:///{SQLITE_FILE_NAME}"
+# --- MongoDB Configuration ---
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "cognivia")
 
-# The engine is the one object that manages connections to the database.
-engine = create_engine(sqlite_url, echo=True)
+# Global MongoDB client
+client: Optional[AsyncIOMotorClient] = None
+database = None
 
-# --- Model Definitions ---
-# These are the "tables" in our database.
+# --- Helper for ObjectId conversion ---
+class PyObjectId(ObjectId):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        from pydantic_core import core_schema
+        return core_schema.json_or_python_schema(
+            json_schema=core_schema.str_schema(),
+            python_schema=core_schema.union_schema([
+                core_schema.is_instance_schema(ObjectId),
+                core_schema.chain_schema([
+                    core_schema.str_schema(),
+                    core_schema.no_info_plain_validator_function(cls.validate),
+                ])
+            ]),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda x: str(x)
+            ),
+        )
 
-class LearningFolder(SQLModel, table=True):
+    @classmethod
+    def validate(cls, v):
+        if isinstance(v, ObjectId):
+            return v
+        if isinstance(v, str):
+            if ObjectId.is_valid(v):
+                return ObjectId(v)
+            raise ValueError("Invalid ObjectId string")
+        raise ValueError("Invalid ObjectId type")
+
+# --- Model Definitions (Pydantic) ---
+
+class LearningFolder(BaseModel):
     """
     Represents a self-contained folder for a specific subject.
     """
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True)
-    # user_id: int = Field(foreign_key="user.id") # We'll add this when we add users
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    name: str
 
-    # A folder can have many resources
-    resources: List["Resource"] = Relationship(back_populates="folder")
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str}
+    }
 
-
-class Resource(SQLModel, table=True):
+class Resource(BaseModel):
     """
     Represents a single resource (PDF, YouTube video) linked to a LearningFolder.
     """
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    
+    ingestion_status: str = Field(default="pending")  # 'pending' | 'ready' | 'failed'
+    ingestion_error: Optional[str] = None
     
     # 'pdf' or 'youtube'
-    resource_type: str 
+    resource_type: str
     
-    # This will be the unique ID we use to talk to the AI API
-    # e.g., "my_document.pdf" or "https://www.youtube.com/watch?v=..."
-    # Note: Not unique globally - same file/URL can be in different folders
-    # The AI service uses this to identify the namespace in Pinecone
-    source_id: str = Field(index=True) 
+    # Unique identifier for AI service (filename or URL)
+    source_id: str
     
-    # Link back to the LearningFolder
-    folder_id: Optional[int] = Field(default=None, foreign_key="learningfolder.id", index=True)
-    folder: Optional[LearningFolder] = Relationship(back_populates="resources")
+    # Link back to the LearningFolder (ObjectId as string)
+    folder_id: Optional[str] = None
     
-    # Note: We handle uniqueness at the application level (checking for duplicates before insert)
-    # This avoids SQLModel/SQLAlchemy compatibility issues with composite unique constraints
+    # Generated notes, study plan, etc.
+    generated_notes: Optional[str] = None
 
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str}
+    }
 
 # --- Database Utility Functions ---
 
-def create_db_and_tables():
+async def init_db():
     """
-    Call this function once (e.g., in main_api.py on startup)
-    to create the database file and all the tables.
+    Initialize MongoDB connection. Call this on startup.
     """
-    print("Creating database and tables...")
-    SQLModel.metadata.create_all(engine)
-    print("Database and tables created successfully.")
+    global client, database
+    client = AsyncIOMotorClient(MONGODB_URL)
+    database = client[MONGODB_DB_NAME]
+    
+    # Create indexes
+    await database.folders.create_index("name")
+    await database.resources.create_index("source_id", unique=True)
+    await database.resources.create_index("folder_id")
+    
+    print(f"Connected to MongoDB: {MONGODB_DB_NAME}")
 
-def get_session():
+async def close_db():
     """
-    A FastAPI dependency that provides a database session for each request.
-    This ensures that each request has its own isolated database connection.
+    Close MongoDB connection. Call this on shutdown.
     """
-    with Session(engine) as session:
-        yield session
+    global client
+    if client:
+        client.close()
+        print("MongoDB connection closed.")
+
+def get_database():
+    """
+    FastAPI dependency that provides the database instance.
+    """
+    return database

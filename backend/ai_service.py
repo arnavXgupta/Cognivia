@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Get the base URL of your AI API (the one you built with AI/main_api.py)
-AI_API_BASE_URL = os.getenv("AI_API_BASE_URL", "http://localhost:8000")
+AI_API_BASE_URL = os.getenv("AI_API_BASE_URL", "http://localhost:8000/")
 
 # We create a single, reusable, asynchronous HTTP client.
 # This is much more efficient than creating a new client for every request.
@@ -44,7 +44,7 @@ async def trigger_youtube_ingestion(urls: List[str]) -> bool:
         print(f"Failed to connect to AI API for YouTube ingestion: {e}")
     return False
 
-async def trigger_pdf_ingestion(filename: str, file_content: bytes) -> bool:
+async def trigger_pdf_ingestion(filename: str, file_content: bytes, callback_url: str) -> bool:
     """
     Sends a PDF file to the AI API to start the ingestion process.
     This is a "fire-and-forget" task.
@@ -54,8 +54,9 @@ async def trigger_pdf_ingestion(filename: str, file_content: bytes) -> bool:
     # We must send this as 'multipart/form-data'
     files_to_upload = {'file': (filename, file_content, 'application/pdf')}
     
+    data = {'callback_url': callback_url, 'source_id': filename}
     try:
-        response = await ai_api_client.post(endpoint, files=files_to_upload)
+        response = await ai_api_client.post(endpoint, files=files_to_upload, data=data)
         response.raise_for_status()
         print(f"Successfully triggered PDF ingestion for: {filename}")
         return True

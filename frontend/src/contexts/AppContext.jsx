@@ -50,15 +50,24 @@ export const AppProvider = ({ children }) => {
   // Fetch folder details (including resources)
   const fetchFolderDetails = useCallback(async (folderId) => {
     try {
-      const folderDetail = await api.getFolder(parseInt(folderId));
+      const folderDetail = await api.getFolder(folderId);
       
       // Transform resources
+      // const resources = folderDetail.resources.map(resource => ({
+      //   id: resource.id.toString(),
+      //   type: resource.resource_type,
+      //   name: resource.source_id,
+      //   sourceId: resource.source_id,
+      //   resourceId: resource.id,
+      // }));
       const resources = folderDetail.resources.map(resource => ({
         id: resource.id.toString(),
         type: resource.resource_type,
         name: resource.source_id,
         sourceId: resource.source_id,
         resourceId: resource.id,
+        status: resource.ingestion_status || 'ready',
+        error: resource.ingestion_error || null,
       }));
 
       // Update folder in state
@@ -104,13 +113,22 @@ export const AppProvider = ({ children }) => {
   const addFolder = async (folderData) => {
     try {
       const newFolder = await api.createFolder(folderData.name);
+      // const transformed = {
+      //   id: newFolder.id.toString(),
+      //   name: newFolder.name,
+      //   resources: [],
+      //   studyPlan: { weeks: [] },
+      //   notes: [],
+      //   chatHistory: [],
+      // };
       const transformed = {
         id: newFolder.id.toString(),
+        type: newFolder.resource_type,
         name: newFolder.name,
-        resources: [],
-        studyPlan: { weeks: [] },
-        notes: [],
-        chatHistory: [],
+        sourceId: newFolder.source_id,
+        resourceId: newFolder.id,
+        status: newFolder.ingestion_status || 'pending',
+        error: newFolder.ingestion_error || null,
       };
       setFolders(prev => [...prev, transformed]);
       return transformed;
@@ -122,12 +140,12 @@ export const AppProvider = ({ children }) => {
 
   const deleteFolder = async (folderId) => {
     try {
-      await api.deleteFolder(parseInt(folderId));
+      await api.deleteFolder(folderId);
       setFolders(prev => prev.filter(f => f.id !== folderId));
       // Clean up folder data
       setFolderData(prev => {
         const updated = { ...prev };
-        delete updated[parseInt(folderId)];
+        delete updated[folderId];
         return updated;
       });
     } catch (err) {
@@ -140,9 +158,9 @@ export const AppProvider = ({ children }) => {
     try {
       let newResource;
       if (resource.type === 'youtube') {
-        newResource = await api.addYouTubeResource(parseInt(folderId), [resource.url]);
+        newResource = await api.addYouTubeResource(folderId, [resource.url]);
       } else if (resource.type === 'pdf') {
-        newResource = await api.uploadPDFResource(parseInt(folderId), resource.file);
+        newResource = await api.uploadPDFResource(folderId, resource.file);
       } else {
         throw new Error('Unknown resource type');
       }
@@ -153,6 +171,8 @@ export const AppProvider = ({ children }) => {
         name: newResource.source_id,
         sourceId: newResource.source_id,
         resourceId: newResource.id,
+        status: newResource.ingestion_status || 'pending',
+        error: newResource.ingestion_error || null,
       };
 
       setFolders(prevFolders => 
@@ -176,7 +196,7 @@ export const AppProvider = ({ children }) => {
 
   const deleteResource = async (folderId, resourceId) => {
     try {
-      await api.deleteResource(parseInt(resourceId));
+      await api.deleteResource(resourceId);
       setFolders(prevFolders => 
         prevFolders.map(folder => {
           if (folder.id === folderId) {
@@ -195,7 +215,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const addChatMessage = (folderId, message) => {
-    const folderIdNum = parseInt(folderId);
+    const folderIdNum = folderId;
     const messageWithId = { ...message, id: Date.now().toString() };
     
     // Update folder data
@@ -223,7 +243,7 @@ export const AppProvider = ({ children }) => {
 
   const generateNotes = async (resourceId) => {
     try {
-      const response = await api.generateNotes(parseInt(resourceId));
+      const response = await api.generateNotes(resourceId);
       // Parse the notes response - it might be a string or structured data
       let notes = [];
       if (response.notes) {
@@ -249,7 +269,7 @@ export const AppProvider = ({ children }) => {
 
   const generateStudyPlan = async (resourceId, knowledgeLevel = 'beginner', learningStyle = 'active') => {
     try {
-      const response = await api.generateStudyPlan(parseInt(resourceId), knowledgeLevel, learningStyle);
+      const response = await api.generateStudyPlan(resourceId, knowledgeLevel, learningStyle);
       // Parse study plan - convert to expected format
       let studyPlan = { weeks: [] };
       if (response.study_plan) {

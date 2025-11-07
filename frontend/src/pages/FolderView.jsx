@@ -84,7 +84,17 @@ export const FolderView = () => {
 
     setIsGeneratingNotes(true);
     try {
-      const resourceId = folder.resources[0].resourceId || parseInt(folder.resources[0].id);
+      const preferred = folder.resources.find(r => r.status === 'ready' && r.type === 'pdf')
+        || folder.resources.find(r => r.status === 'ready')
+        || null;
+
+      if (!preferred) {
+        alert('Your PDF is still processing or failed. Please wait for ingestion to complete.');
+        setIsGeneratingNotes(false);
+        return;
+      }
+      // const preferred = folder.resources.find(r => r.type === 'pdf') || folder.resources[0];
+      const resourceId = preferred.resourceId || preferred.id;
       const notes = await generateNotes(resourceId);
       updateFolderNotes(folderId, notes);
     } catch (error) {
@@ -103,7 +113,7 @@ export const FolderView = () => {
 
     setIsGeneratingStudyPlan(true);
     try {
-      const resourceId = folder.resources[0].resourceId || parseInt(folder.resources[0].id);
+      const resourceId = folder.resources[0].resourceId || folder.resources[0].id;
       const studyPlan = await generateStudyPlan(resourceId);
       updateFolderStudyPlan(folderId, studyPlan);
     } catch (error) {

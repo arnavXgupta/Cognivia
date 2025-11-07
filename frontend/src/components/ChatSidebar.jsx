@@ -41,7 +41,18 @@ export const ChatSidebar = ({ folderName, folderId, resources = [], chatHistory 
 
     try {
       // Use the first resource for chat (in future, could allow selecting specific resource)
-      const resourceId = resources[0].resourceId || parseInt(resources[0].id);
+      // const resourceId = resources[0].resourceId || parseInt(resources[0].id);
+      const preferred = resources.find(r => r.status === 'ready' && r.type === 'pdf')
+        || resources.find(r => r.status === 'ready')
+        || null;
+
+      if (!preferred) {
+        setError('Your resource is still processing or failed. Please wait or re-upload.');
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+      // const preferred = resources.find(r => r.type === 'pdf') || resources[0];
+      const resourceId = preferred.resourceId || parseInt(preferred.id);
       
       const response = await api.chatWithResource(resourceId, message);
       
